@@ -1,0 +1,23 @@
+{
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    ".venv"
+  ],
+  "extraPaths": [
+    "src",
+    ".venv/lib/python3.12/site-packages"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "src",
+      "extraPaths": [
+        "src",
+        ".venv/lib/python3.12/site-packages"
+      ]
+    }
+  ]
+}

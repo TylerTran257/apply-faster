@@ -1,0 +1,22 @@
+[project]
+name = "python-applai"
+version = "0.1.0"
+description = "Standalone Python rewrite of the active LinkedIn Application Review CLI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.43,<2",
+]
+
+[project.scripts]
+applai = "applai.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/applai"]
