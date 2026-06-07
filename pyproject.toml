@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-applai = "applai.cli:main"
+applai = "apply_faster.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -18,5 +18,16 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.scratch",
+    "/.sisyphus",
+    "/AGENTS.md",
+    "/docs",
+    "/dist",
+    "/logs",
+    "/output",
+]
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/applai"]
+packages = ["src/apply_faster"]

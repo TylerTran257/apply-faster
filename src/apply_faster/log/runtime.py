@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 
-from applai.paths import LOGS_DIR
+from ..paths import LOGS_DIR
 
 
 def _now_iso() -> str:
@@ -14,7 +14,9 @@ def _now_iso() -> str:
 
 @dataclass
 class RuntimeLogger:
-    session_stamp: str = field(default_factory=lambda: datetime.now(UTC).strftime("%Y%m%d-%H%M%S"))
+    session_stamp: str = field(
+        default_factory=lambda: datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    )
 
     @property
     def log_path(self) -> Path:
@@ -55,7 +57,9 @@ class RuntimeLogger:
         }
         if data:
             payload.update(data)
-        return self.log_run("checkpoint", phase, f"Checkpoint recorded: {phase}", payload)
+        return self.log_run(
+            "checkpoint", phase, f"Checkpoint recorded: {phase}", payload
+        )
 
 
 _LOGGER = RuntimeLogger()

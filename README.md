@@ -37,3 +37,7 @@ applai --cdp-url "<ws://...>"
 
 - `output/` — Run snapshot files
 - `logs/` — main logs and per-posting application-entry artifacts
+
+## Google Chrome Scripts
+- google-chrome   --remote-debugging-port=9222   --user-data-dir=/tmp/chrome-debug   --profile-directory="Default"   --disable-gpu   --disable-software-rasterizer   --new-window   https://www.linkedin.com/jobs/collections/recommended
+- curl http://127.0.0.1:9222/json/version

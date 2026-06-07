@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, TypedDict
 
-from applai.paths import OUTPUT_DIR
+from ..paths import OUTPUT_DIR
 
 
 EXTRACT_VISIBLE_RESULTS_JS = r"""
@@ -246,26 +246,39 @@ class PostingPayload(TypedDict):
 
 
 @dataclass
-class SnapshotResult:
+class ExtractionResult:
     postings: list[PostingPayload]
     posting_count: int
     timestamp: str
+
+
+@dataclass(frozen=True)
+class SnapshotArtifact:
     path: Path
+    posting_count: int
+    timestamp: str
 
 
-def extract_visible_results_list(page: Any) -> SnapshotResult:
+def extract_visible_results_list(page: Any) -> ExtractionResult:
     raw = page.evaluate(
         EXTRACT_VISIBLE_RESULTS_JS,
         {"maxScrollAttempts": 5, "scrollWaitMs": 1000},
     )
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    snapshot_path = OUTPUT_DIR / f"snapshot-{timestamp}.json"
-    snapshot_path.write_text(json.dumps(raw["postings"], indent=2), encoding="utf-8")
     postings: list[PostingPayload] = raw["postings"]
-    return SnapshotResult(
+    return ExtractionResult(
         postings=postings,
         posting_count=raw["postingCount"],
         timestamp=raw["timestamp"],
+    )
+
+
+def write_results_snapshot(result: ExtractionResult) -> SnapshotArtifact:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = result.timestamp.replace(":", "-").replace(".", "-")
+    snapshot_path = OUTPUT_DIR / f"snapshot-{timestamp}.json"
+    snapshot_path.write_text(json.dumps(result.postings, indent=2), encoding="utf-8")
+    return SnapshotArtifact(
         path=snapshot_path,
+        posting_count=result.posting_count,
+        timestamp=result.timestamp,
     )

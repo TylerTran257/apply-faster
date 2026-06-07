@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
+from urllib.parse import urlparse
 
 
 class BrowserSessionError(RuntimeError):
@@ -47,9 +48,27 @@ def get_all_pages(browser: Any) -> list[Any]:
     return pages
 
 
+def is_valid_linkedin_jobs_page_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return (
+        parsed.scheme == "https"
+        and parsed.netloc in {"linkedin.com", "www.linkedin.com"}
+        and parsed.path.startswith("/jobs")
+    )
+
+
+def is_valid_linkedin_job_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return (
+        parsed.scheme == "https"
+        and parsed.netloc in {"linkedin.com", "www.linkedin.com"}
+        and parsed.path.startswith("/jobs/view/")
+    )
+
+
 def get_first_linkedin_jobs_page(browser: Any) -> Any | None:
     for page in get_all_pages(browser):
-        if "linkedin.com/jobs" in page.url:
+        if is_valid_linkedin_jobs_page_url(page.url):
             return page
     return None
 

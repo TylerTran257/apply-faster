@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 
-from applai.bootstrap.browser import BrowserSessionError, attach_browser_session
-from applai.bootstrap.run import execute_run
+from .bootstrap.browser import BrowserSessionError, attach_browser_session
+from .bootstrap.run import execute_run
 
 
 def build_parser() -> argparse.ArgumentParser:
