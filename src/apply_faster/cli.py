@@ -37,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("setup", help="Install Chrome and Playwright browser drivers.")
+    subparsers.add_parser("serve", help="Start the web UI server on port 3000.")
 
     parser.add_argument(
         "--cdp-url",
@@ -87,12 +88,21 @@ def _setup() -> int:
     return 0
 
 
+def _serve() -> int:
+    from .web.server import start_server
+
+    start_server()
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "setup":
         return _setup()
+    if args.command == "serve":
+        return _serve()
 
     return _run(args)
 

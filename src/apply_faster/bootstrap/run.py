@@ -97,7 +97,7 @@ def execute_run(
     session: BrowserSession,
     presenter: BootstrapPresenter | None = None,
     observer: SessionObserver | None = None,
-) -> None:
+) -> tuple[RunSummary, Path | None]:
     active_presenter = presenter or BootstrapPresenter()
     active_presenter.announce_start()
 
@@ -121,7 +121,10 @@ def execute_run(
     summary = record_job_postings(results_page, artifacts.snapshot_path, observer=observer)
     active_presenter.announce_recording_complete(summary)
 
+    csv_path = None
     try:
-        export_reviewed_csv(summary)
+        csv_path = export_reviewed_csv(summary)
     except Exception as error:
         print(f"Error: CSV export failed: {error}")
+
+    return summary, csv_path
