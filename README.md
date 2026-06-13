@@ -2,9 +2,41 @@
 
 Standalone Python rewrite of the active CLI-driven LinkedIn Application Review workflow.
 
-## Quick Start (Docker)
+## Quick Start
 
-The fastest way to get started on any platform (Linux, macOS, Windows).
+### 1. Install
+
+```bash
+cd apply-faster
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+First-time setup (installs Chrome and Playwright browser drivers if needed):
+
+```bash
+applai setup
+```
+
+### 2. Run
+
+```bash
+applai serve
+```
+
+This will:
+
+1. Auto-launch Chrome and open LinkedIn's recommended jobs page
+2. Start the web UI server on port 3000
+3. You log in to LinkedIn in the Chrome window
+4. Open [http://localhost:3000](http://localhost:3000) and click **Start Session**
+5. Review jobs by closing tabs — close quickly to skip, leave open to mark as reviewed
+6. When done, download the reviewed-jobs CSV from the web UI
+
+## Docker Setup
+
+For cross-platform distribution or if you prefer not to install Python locally.
 
 ### Prerequisites
 
@@ -13,7 +45,7 @@ The fastest way to get started on any platform (Linux, macOS, Windows).
 
 ### Steps
 
-1. **Start Chrome with remote debugging:**
+1. **Start Chrome with remote debugging** (in a separate terminal):
 
 ```bash
 google-chrome \
@@ -29,15 +61,13 @@ google-chrome \
 
 2. **Log in to LinkedIn** in the Chrome window that opens.
 
-3. **Start the Docker container:**
+3. **Build and start the container:**
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
-4. **Open the web UI** at [http://localhost:3000](http://localhost:3000).
-
-5. **Click "Start Session"** in the web UI to begin reviewing jobs.
+4. **Open** [http://localhost:3000](http://localhost:3000) and click **Start Session**.
 
 ### Platform notes
 
@@ -45,7 +75,7 @@ docker compose up
 |----------|---------------|-------|
 | macOS | Works out of the box | Docker Desktop resolves `host.docker.internal` natively |
 | Windows | Works out of the box | Docker Desktop resolves `host.docker.internal` natively |
-| Linux | Works via `extra_hosts` | `docker-compose.yml` includes `host.docker.internal:host-gateway` (Docker 20.10+) |
+| Linux / WSL2 | Works via `extra_hosts` | `docker-compose.yml` includes `host.docker.internal:host-gateway` (Docker 20.10+) |
 
 ### Environment variables
 
@@ -60,89 +90,35 @@ Override defaults in your shell or `.env` file:
 CDP_HOST=192.168.1.100 CDP_PORT=9333 docker compose up
 ```
 
-## Quick Start (pip install)
+## Alternative: CLI-only mode
 
-For users who prefer a local Python setup.
-
-### Setup
-
-```bash
-cd apply-faster
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-### Run (CLI)
-
-The simplest way to start is with no arguments — Chrome launches automatically:
+If you prefer terminal output over the web UI:
 
 ```bash
 applai
 ```
 
-This will:
+Chrome auto-launches. Log in to LinkedIn, press Enter in the terminal to begin, and review jobs by closing tabs. Session summary prints to the terminal.
 
-1. Launch Chrome with remote debugging enabled
-2. Open LinkedIn's recommended jobs page
-3. Wait for you to log in and navigate to a jobs page
-4. Press Enter in the terminal to begin the review session
-
-### Run (Web UI without Docker)
-
-Start the web UI server locally:
+To connect to an already-running Chrome instead of auto-launching:
 
 ```bash
-applai serve
-```
-
-Then open [http://localhost:3000](http://localhost:3000). Chrome must be running with `--remote-debugging-port=9222` on the same machine.
-
-### Advanced: connect to an existing Chrome session
-
-If you prefer to manage Chrome yourself, pass `--cdp-url` directly:
-
-```bash
-# Start Chrome with remote debugging
-google-chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/chrome-debug \
-  --profile-directory="Default" \
-  --disable-gpu \
-  --disable-software-rasterizer \
-  --new-window \
-  https://www.linkedin.com/jobs/collections/recommended
-
-# Get the WebSocket URL
-curl http://127.0.0.1:9222/json/version
-
-# Connect
 applai --cdp-url "ws://127.0.0.1:9222/devtools/browser/<id>"
 ```
 
-### First-time setup
-
-Install Chrome and Playwright browser drivers:
-
-```bash
-applai setup
-```
-
-### CLI options
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--cdp-url` | *(none)* | WebSocket URL for an already-running Chrome session. Skips auto-launch. |
-| `--port` | `9222` | Remote debugging port when auto-launching Chrome. |
-
-### Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
 | `applai` | Start a CLI review session (auto-launches Chrome) |
 | `applai run` | Same as `applai` |
-| `applai serve` | Start the web UI server on port 3000 |
+| `applai serve` | Start the web UI server on port 3000 (auto-launches Chrome locally) |
 | `applai setup` | Install Chrome and Playwright browser drivers |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cdp-url` | *(none)* | WebSocket URL for an already-running Chrome session. Skips auto-launch. |
+| `--port` | `9222` | Remote debugging port when auto-launching Chrome. |
 
 ## Troubleshooting
 
@@ -157,11 +133,17 @@ applai setup
 ### "No open linkedin.com/jobs tab found"
 
 - Make sure you are on a `linkedin.com/jobs/...` page in Chrome before starting the session
-- If Chrome redirected you to `/feed` after login, navigate back to the jobs page manually
+- If Chrome redirected you to `/feed` after login, the tool will try to navigate automatically — if it still fails, navigate manually
+
+### Web UI shows "Waiting for Chrome..."
+
+- Chrome may still be starting up — wait a few seconds
+- If it persists, check that Chrome launched successfully (look for the Chrome window)
+- For Docker: ensure Chrome is running on the host with the debug flags above
 
 ### Web UI shows "Error" after clicking Start
 
-- Check the Docker container logs: `docker compose logs`
+- Check logs: `docker compose logs` (Docker) or the terminal running `applai serve` (local)
 - Common cause: Chrome is not running or the CDP port is blocked
 
 ## Runtime artifacts
