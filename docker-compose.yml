@@ -1,0 +1,10 @@
+services:
+  applai:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - CDP_HOST=${CDP_HOST:-host.docker.internal}
+      - CDP_PORT=${CDP_PORT:-9222}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

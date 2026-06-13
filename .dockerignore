@@ -1,0 +1,11 @@
+.venv/
+.git/
+.scratch/
+.sisyphus/
+output/
+logs/
+dist/
+docs/
+__pycache__/
+*.pyc
+*.egg-info/
