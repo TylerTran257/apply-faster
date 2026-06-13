@@ -151,6 +151,13 @@ def cdp_port_from_env() -> int:
     return int(os.environ.get("CDP_PORT", "9222"))
 
 
+def is_local_environment() -> bool:
+    if os.path.exists("/.dockerenv"):
+        return False
+    host = cdp_host_from_env()
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
 def get_all_pages(browser: Any) -> list[Any]:
     pages: list[Any] = []
     for context in browser.contexts:

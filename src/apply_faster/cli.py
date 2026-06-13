@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 from collections.abc import Sequence
 
 from .bootstrap.browser import (
@@ -89,9 +90,31 @@ def _setup() -> int:
 
 
 def _serve() -> int:
+    from .bootstrap.browser import (
+        cdp_port_from_env,
+        is_local_environment,
+        launch_chrome,
+    )
     from .web.server import start_server
 
-    start_server()
+    chrome_process = None
+    if is_local_environment():
+        port = cdp_port_from_env()
+        print(f"Launching Chrome on port {port}...")
+        chrome_process = launch_chrome(port=port)
+        print("Chrome launched. Log in to LinkedIn, then open http://localhost:3000")
+
+    try:
+        start_server()
+    finally:
+        if chrome_process is not None:
+            chrome_process.terminate()
+            try:
+                chrome_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                chrome_process.kill()
+                chrome_process.wait()
+
     return 0
 
 

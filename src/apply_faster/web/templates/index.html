@@ -259,44 +259,71 @@
       document.getElementById('start-btn').textContent = 'Start Session';
     }
 
+    let chromePoller = null;
+
+    function pollChromeStatus() {
+      if (chromePoller) return;
+      chromePoller = setInterval(() => {
+        fetch('/api/status').then(r => r.json()).then(data => {
+          if (data.chrome_connected) {
+            clearInterval(chromePoller);
+            chromePoller = null;
+            setStatus('idle', 'Chrome connected — log in to LinkedIn, then click Start');
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').textContent = 'Start Session';
+          }
+        }).catch(() => {});
+      }, 2000);
+    }
+
+    function applyInitialState(data) {
+      if (data.status === 'running') {
+        setStatus('running', 'Running');
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('start-btn').textContent = 'Session Running';
+        document.getElementById('progress-section').style.display = 'block';
+        document.getElementById('progress-bar').max = data.total;
+        document.getElementById('progress-bar').value = data.completed_postings.length;
+        document.getElementById('progress-count').textContent =
+          `(${data.completed_postings.length}/${data.total})`;
+        if (data.current_posting) {
+          document.getElementById('current-job').style.display = 'block';
+          document.getElementById('job-title').textContent =
+            `${data.current_posting.company || '(unknown)'} — ${data.current_posting.title || '(unknown)'}`;
+          document.getElementById('job-meta').textContent =
+            `Source: ${data.current_posting.source || 'unknown'}`;
+        }
+        data.completed_postings.forEach(p => {
+          addCompletedJob({ posting: p, status: p.status, reason: p.reason });
+        });
+        connectSSE();
+      } else if (data.status === 'complete' && data.summary) {
+        setStatus('complete', 'Complete');
+        document.getElementById('progress-section').style.display = 'block';
+        document.getElementById('progress-bar').max = data.total;
+        document.getElementById('progress-bar').value = data.total;
+        document.getElementById('progress-count').textContent =
+          `(${data.total}/${data.total})`;
+        data.completed_postings.forEach(p => {
+          addCompletedJob({ posting: p, status: p.status, reason: p.reason });
+        });
+        renderSummary(data.summary);
+      } else if (data.status === 'error' && data.error) {
+        showError(data.error);
+      } else if (data.chrome_connected === false) {
+        setStatus('idle', 'Waiting for Chrome...');
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('start-btn').textContent = 'Waiting for Chrome...';
+        pollChromeStatus();
+      } else {
+        setStatus('idle', 'Chrome connected — log in to LinkedIn, then click Start');
+      }
+    }
+
     // On page load, recover state
     fetch('/api/status')
       .then(r => r.json())
-      .then(data => {
-        setStatus(data.status, data.status.charAt(0).toUpperCase() + data.status.slice(1));
-        if (data.status === 'running') {
-          document.getElementById('start-btn').disabled = true;
-          document.getElementById('start-btn').textContent = 'Session Running';
-          document.getElementById('progress-section').style.display = 'block';
-          document.getElementById('progress-bar').max = data.total;
-          document.getElementById('progress-bar').value = data.completed_postings.length;
-          document.getElementById('progress-count').textContent =
-            `(${data.completed_postings.length}/${data.total})`;
-          if (data.current_posting) {
-            document.getElementById('current-job').style.display = 'block';
-            document.getElementById('job-title').textContent =
-              `${data.current_posting.company || '(unknown)'} — ${data.current_posting.title || '(unknown)'}`;
-            document.getElementById('job-meta').textContent =
-              `Source: ${data.current_posting.source || 'unknown'}`;
-          }
-          data.completed_postings.forEach(p => {
-            addCompletedJob({ posting: p, status: p.status, reason: p.reason });
-          });
-          connectSSE();
-        } else if (data.status === 'complete' && data.summary) {
-          document.getElementById('progress-section').style.display = 'block';
-          document.getElementById('progress-bar').max = data.total;
-          document.getElementById('progress-bar').value = data.total;
-          document.getElementById('progress-count').textContent =
-            `(${data.total}/${data.total})`;
-          data.completed_postings.forEach(p => {
-            addCompletedJob({ posting: p, status: p.status, reason: p.reason });
-          });
-          renderSummary(data.summary);
-        } else if (data.status === 'error' && data.error) {
-          showError(data.error);
-        }
-      });
+      .then(applyInitialState);
   </script>
 </body>
 </html>

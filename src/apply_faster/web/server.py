@@ -14,9 +14,13 @@ from ..bootstrap.browser import (
     attach_browser_session,
     cdp_host_from_env,
     cdp_port_from_env,
+    get_all_pages,
+    get_first_linkedin_jobs_page,
     resolve_cdp_url,
 )
 from ..bootstrap.run import execute_run
+
+LINKEDIN_JOBS_URL = "https://www.linkedin.com/jobs/collections/recommended/"
 from .observer import WebObserver
 from .state import SessionState
 
@@ -36,6 +40,10 @@ def _run_session() -> None:
     try:
         cdp_url = resolve_cdp_url(host=host, port=port, timeout=10.0)
         with attach_browser_session(cdp_url) as session:
+            if not get_first_linkedin_jobs_page(session.browser):
+                pages = get_all_pages(session.browser)
+                if pages:
+                    pages[0].goto(LINKEDIN_JOBS_URL, wait_until="domcontentloaded")
             _summary, csv_path = execute_run(session, observer=observer)
             if csv_path:
                 _state.set_complete(
@@ -73,7 +81,13 @@ async def events() -> StreamingResponse:
 
 @app.get("/api/status")
 async def status() -> JSONResponse:
-    return JSONResponse(_state.to_dict())
+    data = _state.to_dict()
+    try:
+        resolve_cdp_url(host=cdp_host_from_env(), port=cdp_port_from_env(), timeout=1.0)
+        data["chrome_connected"] = True
+    except Exception:
+        data["chrome_connected"] = False
+    return JSONResponse(data)
 
 
 @app.post("/api/start")
