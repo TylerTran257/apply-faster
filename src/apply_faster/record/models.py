@@ -10,10 +10,6 @@ SOURCE_LINKEDIN = "LinkedIn"
 SKIP_REASON_DUPLICATE_URL = "duplicate-url"
 SKIP_REASON_CLOSED_BEFORE_READY = "closed-before-ready"
 SKIP_REASON_CLOSED_WITHIN_10_SECONDS = "closed-within-10-seconds"
-CHECKPOINT_RUN_START = "run-start"
-CHECKPOINT_POSTING_STARTED = "posting-started"
-CHECKPOINT_POSTING_COMPLETED = "posting-completed"
-CHECKPOINT_RUN_END = "run-end"
 
 
 def now_iso() -> str:
@@ -42,18 +38,6 @@ class CanonicalJobIdentity:
 
     def display_name(self) -> str:
         return f"{self.title} at {self.company}"
-
-
-@dataclass
-class ApplicationLogEntry:
-    canonical_id: CanonicalJobIdentity
-    start_time: str = field(default_factory=now_iso)
-    end_time: str | None = None
-    outcome: str | None = None
-
-    def finish(self, outcome: str) -> None:
-        self.end_time = now_iso()
-        self.outcome = outcome
 
 
 @dataclass
