@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>applai - Job Review Session</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --badge-reviewed: #2e7d32;
+      --badge-skipped: #f9a825;
+      --badge-failed: #c62828;
+      --badge-text: #fff;
+    }
+    body { max-width: 860px; margin: 0 auto; padding: 1rem 1.5rem; }
+    .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .status-dot.idle { background: #9e9e9e; }
+    .status-dot.running { background: #2196f3; }
+    .status-dot.complete { background: #4caf50; }
+    .status-dot.error { background: #f44336; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.75rem; font-weight: 600; color: var(--badge-text);
+      text-transform: uppercase;
+    }
+    .badge.reviewed { background: var(--badge-reviewed); }
+    .badge.skipped { background: var(--badge-skipped); color: #333; }
+    .badge.failed { background: var(--badge-failed); }
+    .current-job { background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .current-job h4 { margin: 0 0 0.25rem; }
+    .current-job small { color: var(--pico-muted-color); }
+    .job-list { list-style: none; padding: 0; }
+    .job-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; align-items: center; gap: 0.5rem; }
+    .job-list li:last-child { border-bottom: none; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .summary-card { text-align: center; padding: 0.75rem; background: var(--pico-card-background-color); border-radius: 8px; border: 1px solid var(--pico-muted-border-color); }
+    .summary-card .count { font-size: 1.75rem; font-weight: 700; }
+    .summary-card .label { font-size: 0.8rem; color: var(--pico-muted-color); }
+    .error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 1rem; color: #b71c1c; margin: 1rem 0; }
+    .reason-list { font-size: 0.85rem; margin: 0.5rem 0; padding-left: 1.5rem; }
+    #progress-section, #summary-section, #error-section { display: none; }
+    .actions { display: flex; gap: 0.5rem; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>applai</h1>
+    <p>
+      <span class="status-dot idle" id="status-dot"></span>
+      <span id="status-text">Idle</span>
+    </p>
+  </header>
+
+  <main>
+    <div class="actions">
+      <button id="start-btn" onclick="startSession()">Start Session</button>
+      <a id="csv-btn" href="/api/csv" role="button" class="outline" style="display:none">Download CSV</a>
+    </div>
+
+    <div id="error-section">
+      <div class="error-box" id="error-message"></div>
+    </div>
+
+    <div id="progress-section">
+      <h3>Progress <span id="progress-count"></span></h3>
+      <progress id="progress-bar" value="0" max="100"></progress>
+      <div class="current-job" id="current-job" style="display:none">
+        <h4 id="job-title">Loading...</h4>
+        <small id="job-meta"></small>
+      </div>
+      <h4>Completed</h4>
+      <ul class="job-list" id="completed-list"></ul>
+    </div>
+
+    <div id="summary-section">
+      <h3>Session Summary</h3>
+      <div class="summary-grid" id="summary-counts"></div>
+      <div id="summary-duration"></div>
+      <div id="summary-reasons"></div>
+      <h4>All Postings</h4>
+      <ul class="job-list" id="summary-postings"></ul>
+    </div>
+  </main>
+
+  <script>
+    let eventSource = null;
+
+    function startSession() {
+      const btn = document.getElementById('start-btn');
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      document.getElementById('error-section').style.display = 'none';
+      document.getElementById('summary-section').style.display = 'none';
+      document.getElementById('csv-btn').style.display = 'none';
+      document.getElementById('completed-list').innerHTML = '';
+
+      fetch('/api/start', { method: 'POST' })
+        .then(r => {
+          if (r.status === 409) {
+            btn.textContent = 'Session Running';
+            return;
+          }
+          if (!r.ok) throw new Error('Failed to start session');
+          btn.textContent = 'Session Running';
+          connectSSE();
+        })
+        .catch(err => showError(err.message));
+    }
+
+    function connectSSE() {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource('/events');
+      eventSource.onmessage = function(e) {
+        const event = JSON.parse(e.data);
+        handleEvent(event);
+      };
+      eventSource.onerror = function() {
+        // Reconnect will be handled by EventSource automatically
+      };
+    }
+
+    function handleEvent(event) {
+      switch (event.type) {
+        case 'session_start':
+          setStatus('running', 'Running');
+          document.getElementById('progress-section').style.display = 'block';
+          document.getElementById('progress-bar').max = event.total;
+          document.getElementById('progress-bar').value = 0;
+          document.getElementById('progress-count').textContent = `(0/${event.total})`;
+          break;
+
+        case 'job_start':
+          document.getElementById('current-job').style.display = 'block';
+          document.getElementById('job-title').textContent =
+            `${event.posting.company || '(unknown)'} — ${event.posting.title || '(unknown)'}`;
+          document.getElementById('job-meta').textContent =
+            `Source: ${event.posting.source || 'unknown'} | ${event.posting.url || ''}`;
+          document.getElementById('progress-count').textContent =
+            `(${event.index + 1}/${event.total})`;
+          break;
+
+        case 'job_complete':
+          document.getElementById('progress-bar').value = event.index + 1;
+          addCompletedJob(event);
+          break;
+
+        case 'session_complete':
+          setStatus('complete', 'Complete');
+          document.getElementById('current-job').style.display = 'none';
+          document.getElementById('start-btn').disabled = false;
+          document.getElementById('start-btn').textContent = 'Start Session';
+          renderSummary(event.summary);
+          if (eventSource) eventSource.close();
+          break;
+
+        case 'error':
+          setStatus('error', 'Error');
+          showError(event.error);
+          document.getElementById('start-btn').disabled = false;
+          document.getElementById('start-btn').textContent = 'Start Session';
+          if (eventSource) eventSource.close();
+          break;
+      }
+    }
+
+    function setStatus(cls, text) {
+      const dot = document.getElementById('status-dot');
+      dot.className = 'status-dot ' + cls;
+      document.getElementById('status-text').textContent = text;
+    }
+
+    function addCompletedJob(event) {
+      const li = document.createElement('li');
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + event.status;
+      badge.textContent = event.status;
+      li.appendChild(badge);
+      const label = document.createElement('span');
+      const company = event.posting.company || '(unknown)';
+      const title = event.posting.title || '(unknown)';
+      let text = `${company} — ${title}`;
+      if (event.reason) text += ` (${event.reason})`;
+      label.textContent = text;
+      li.appendChild(label);
+      document.getElementById('completed-list').appendChild(li);
+    }
+
+    function renderSummary(summary) {
+      document.getElementById('summary-section').style.display = 'block';
+
+      const counts = document.getElementById('summary-counts');
+      counts.innerHTML = '';
+      const items = [
+        { label: 'Reviewed', count: summary.reviewed_count, color: 'var(--badge-reviewed)' },
+        { label: 'Skipped', count: summary.skipped_count, color: 'var(--badge-skipped)' },
+        { label: 'Failed', count: summary.failed_count, color: 'var(--badge-failed)' },
+        { label: 'Total', count: summary.total, color: 'var(--pico-primary)' },
+      ];
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'summary-card';
+        card.innerHTML = `<div class="count" style="color:${item.color}">${item.count}</div><div class="label">${item.label}</div>`;
+        counts.appendChild(card);
+      });
+
+      if (summary.start_time && summary.end_time) {
+        const start = new Date(summary.start_time);
+        const end = new Date(summary.end_time);
+        const secs = Math.round((end - start) / 1000);
+        const min = Math.floor(secs / 60);
+        const sec = secs % 60;
+        document.getElementById('summary-duration').textContent =
+          `Duration: ${min > 0 ? min + 'm ' : ''}${sec}s`;
+      }
+
+      const reasons = document.getElementById('summary-reasons');
+      reasons.innerHTML = '';
+      if (summary.skip_reasons && Object.keys(summary.skip_reasons).length) {
+        reasons.innerHTML += '<strong>Skip Reasons</strong><ul class="reason-list">' +
+          Object.entries(summary.skip_reasons).map(([r, c]) => `<li>${r}: ${c}</li>`).join('') + '</ul>';
+      }
+      if (summary.failure_reasons && Object.keys(summary.failure_reasons).length) {
+        reasons.innerHTML += '<strong>Failure Reasons</strong><ul class="reason-list">' +
+          Object.entries(summary.failure_reasons).map(([r, c]) => `<li>${r}: ${c}</li>`).join('') + '</ul>';
+      }
+
+      const postings = document.getElementById('summary-postings');
+      postings.innerHTML = '';
+      if (summary.postings) {
+        summary.postings.forEach(p => {
+          const li = document.createElement('li');
+          const badge = document.createElement('span');
+          badge.className = 'badge ' + p.status;
+          badge.textContent = p.status;
+          li.appendChild(badge);
+          const label = document.createElement('span');
+          const id = p.canonicalId || {};
+          label.textContent = `${id.company || '(unknown)'} — ${id.title || '(unknown)'}`;
+          if (p.reason) label.textContent += ` (${p.reason})`;
+          li.appendChild(label);
+          postings.appendChild(li);
+        });
+      }
+
+      // Check for CSV
+      fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.csv_path) {
+            document.getElementById('csv-btn').style.display = 'inline-block';
+          }
+        });
+    }
+
+    function showError(msg) {
+      document.getElementById('error-section').style.display = 'block';
+      document.getElementById('error-message').textContent = msg;
+      document.getElementById('start-btn').disabled = false;
+      document.getElementById('start-btn').textContent = 'Start Session';
+    }
+
+    // On page load, recover state
+    fetch('/api/status')
+      .then(r => r.json())
+      .then(data => {
+        setStatus(data.status, data.status.charAt(0).toUpperCase() + data.status.slice(1));
+        if (data.status === 'running') {
+          document.getElementById('start-btn').disabled = true;
+          document.getElementById('start-btn').textContent = 'Session Running';
+          document.getElementById('progress-section').style.display = 'block';
+          document.getElementById('progress-bar').max = data.total;
+          document.getElementById('progress-bar').value = data.completed_postings.length;
+          document.getElementById('progress-count').textContent =
+            `(${data.completed_postings.length}/${data.total})`;
+          if (data.current_posting) {
+            document.getElementById('current-job').style.display = 'block';
+            document.getElementById('job-title').textContent =
+              `${data.current_posting.company || '(unknown)'} — ${data.current_posting.title || '(unknown)'}`;
+            document.getElementById('job-meta').textContent =
+              `Source: ${data.current_posting.source || 'unknown'}`;
+          }
+          data.completed_postings.forEach(p => {
+            addCompletedJob({ posting: p, status: p.status, reason: p.reason });
+          });
+          connectSSE();
+        } else if (data.status === 'complete' && data.summary) {
+          document.getElementById('progress-section').style.display = 'block';
+          document.getElementById('progress-bar').max = data.total;
+          document.getElementById('progress-bar').value = data.total;
+          document.getElementById('progress-count').textContent =
+            `(${data.total}/${data.total})`;
+          data.completed_postings.forEach(p => {
+            addCompletedJob({ posting: p, status: p.status, reason: p.reason });
+          });
+          renderSummary(data.summary);
+        } else if (data.status === 'error' && data.error) {
+          showError(data.error);
+        }
+      });
+  </script>
+</body>
+</html>
