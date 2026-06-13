@@ -79,14 +79,22 @@ async def events() -> StreamingResponse:
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+def _check_chrome_connected() -> bool:
+    try:
+        endpoint = f"http://{cdp_host_from_env()}:{cdp_port_from_env()}/json/version"
+        from urllib.request import urlopen as _urlopen
+
+        with _urlopen(endpoint, timeout=1) as resp:
+            resp.read()
+        return True
+    except Exception:
+        return False
+
+
 @app.get("/api/status")
 async def status() -> JSONResponse:
     data = _state.to_dict()
-    try:
-        resolve_cdp_url(host=cdp_host_from_env(), port=cdp_port_from_env(), timeout=1.0)
-        data["chrome_connected"] = True
-    except Exception:
-        data["chrome_connected"] = False
+    data["chrome_connected"] = await asyncio.to_thread(_check_chrome_connected)
     return JSONResponse(data)
 
 
