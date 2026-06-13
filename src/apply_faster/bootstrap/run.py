@@ -18,6 +18,7 @@ from ..linkedin.extractor import (
     write_results_snapshot,
 )
 from ..linkedin.normalizer import normalize_snapshot
+from ..record.csv_export import export_reviewed_csv
 from ..record.models import RunSummary
 from ..record.runner import RecordJobPostings
 
@@ -113,3 +114,8 @@ def execute_run(
     active_presenter.announce_recording_start()
     summary = record_job_postings(results_page, artifacts.snapshot_path)
     active_presenter.announce_recording_complete(summary)
+
+    try:
+        export_reviewed_csv(summary)
+    except Exception as error:
+        print(f"Error: CSV export failed: {error}")
