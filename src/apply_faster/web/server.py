@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from starlette.responses import StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
 from ..bootstrap.browser import (
     attach_browser_session,
@@ -95,7 +94,7 @@ async def start_session() -> JSONResponse:
     return JSONResponse({"status": "started"})
 
 
-@app.get("/api/csv")
+@app.get("/api/csv", response_model=None)
 async def download_csv() -> FileResponse | JSONResponse:
     csv_path = _state.to_dict().get("csv_path")
     if not csv_path or not Path(csv_path).exists():
