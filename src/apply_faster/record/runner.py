@@ -20,6 +20,16 @@ from .validators import validate_posting_url
 FAILURE_REASON_INVALID_URL = "invalid-url"
 
 
+def _live_label(posting: JobPostingInput, index: int, total: int) -> str:
+    source = posting.source or "(unknown source)"
+    company = posting.company or "(unknown company)"
+    title = posting.title or "(unknown title)"
+    label = f"[{index + 1}/{total}] {source} | {company} | {title}"
+    if not posting.company or not posting.title:
+        label += f" -- {posting.url or '(no url)'}"
+    return label
+
+
 class RecordJobPostings:
     def __init__(self, results_page: Any, postings: list[JobPostingInput]) -> None:
         self.results_page = results_page
@@ -64,17 +74,16 @@ class RecordJobPostings:
 
     def process_posting(self, posting: JobPostingInput, index: int) -> None:
         canonical_id = self.capture_canonical_identity(posting)
-        print(
-            f"\n[{index + 1}/{len(self.postings)}] Processing: {canonical_id.display_name()}"
-        )
+        label = _live_label(posting, index, len(self.postings))
+        print(f"\n{label}")
         if not validate_posting_url(posting):
             self.record_result(canonical_id, "failed", FAILURE_REASON_INVALID_URL)
-            print("Failed")
+            print("[failed]")
             return
         key = canonical_id.unique_key()
         if key is not None and key in self.seen_keys:
             self.record_result(canonical_id, "skipped", SKIP_REASON_DUPLICATE_URL)
-            print("Skipped")
+            print("[skipped] duplicate-url")
             return
         if key is not None:
             self.seen_keys.add(key)
@@ -97,17 +106,17 @@ class RecordJobPostings:
                     self.record_result(
                         canonical_id, "skipped", SKIP_REASON_CLOSED_BEFORE_READY
                     )
-                    print("Skipped")
+                    print("[skipped] closed-before-ready")
                     return
                 self.record_result(canonical_id, "failed", str(error))
-                print("Failed")
+                print("[failed]")
                 return
             ready_at = time.time()
             active_page.wait_for_event("close", timeout=0)
             closed_at = time.time()
             status, reason = self.get_posting_outcome(closed_at - ready_at)
             self.record_result(canonical_id, status, reason)
-            print("Reviewed" if status == "reviewed" else "Skipped")
+            print(f"[{status}]")
         except Exception as error:
             if posting_page and not posting_page.is_closed():
                 try:
@@ -115,7 +124,7 @@ class RecordJobPostings:
                 except Exception:
                     pass
             self.record_result(canonical_id, "failed", str(error))
-            print("Failed")
+            print("[failed]")
         finally:
             self.return_focus_to_linkedin_results()
 

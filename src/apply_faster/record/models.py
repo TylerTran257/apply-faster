@@ -65,6 +65,7 @@ class JobPostingResult:
 
 
 class SummaryPostingIdentity(TypedDict):
+    source: str
     url: str
     title: str | None
     company: str | None
@@ -90,6 +91,7 @@ class RunSummary:
 
     def add_result(self, result: JobPostingResult) -> None:
         identity: SummaryPostingIdentity = {
+            "source": result.canonical_id.source,
             "url": result.canonical_id.url,
             "title": result.canonical_id.title,
             "company": result.canonical_id.company,
