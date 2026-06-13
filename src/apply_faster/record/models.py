@@ -6,6 +6,7 @@ from typing import TypedDict
 
 
 MANUAL_CLOSE_THRESHOLD_SECONDS = 10
+SOURCE_LINKEDIN = "LinkedIn"
 SKIP_REASON_DUPLICATE_URL = "duplicate-url"
 SKIP_REASON_CLOSED_BEFORE_READY = "closed-before-ready"
 SKIP_REASON_CLOSED_WITHIN_10_SECONDS = "closed-within-10-seconds"
@@ -20,13 +21,24 @@ def now_iso() -> str:
 
 
 @dataclass
+class JobPostingInput:
+    source: str
+    url: str | None = None
+    title: str | None = None
+    company: str | None = None
+
+
+@dataclass
 class CanonicalJobIdentity:
     url: str
     title: str | None
     company: str | None
+    source: str = ""
 
-    def unique_key(self) -> str:
-        return self.url.lower().strip()
+    def unique_key(self) -> str | None:
+        if not self.url or not self.url.strip():
+            return None
+        return f"{self.source.lower()}:{self.url.strip()}"
 
     def display_name(self) -> str:
         return f"{self.title} at {self.company}"
