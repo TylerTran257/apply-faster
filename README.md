@@ -47,6 +47,8 @@ For cross-platform distribution or if you prefer not to install Python locally.
 
 1. **Start Chrome with remote debugging** (in a separate terminal):
 
+**Linux / macOS:**
+
 ```bash
 google-chrome \
   --remote-debugging-port=9222 \
@@ -54,6 +56,30 @@ google-chrome \
   --user-data-dir=/tmp/chrome-debug \
   --profile-directory="Default" \
   --new-window \
+  https://www.linkedin.com/jobs/collections/recommended
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --remote-debugging-port=9222 ^
+  --remote-debugging-address=0.0.0.0 ^
+  --user-data-dir=%TEMP%\chrome-debug ^
+  --profile-directory="Default" ^
+  --new-window ^
+  https://www.linkedin.com/jobs/collections/recommended
+```
+
+**Windows (PowerShell):**
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+  --remote-debugging-port=9222 `
+  --remote-debugging-address=0.0.0.0 `
+  --user-data-dir=$env:TEMP\chrome-debug `
+  --profile-directory="Default" `
+  --new-window `
   https://www.linkedin.com/jobs/collections/recommended
 ```
 
