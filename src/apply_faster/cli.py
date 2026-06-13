@@ -20,24 +20,40 @@ def build_parser() -> argparse.ArgumentParser:
         prog="applai",
         description="Standalone Python rewrite of the LinkedIn Application Review CLI.",
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command")
+
+    run_parser = subparsers.add_parser("run", help="Start a job review session.")
+    run_parser.add_argument(
         "--cdp-url",
         default=None,
         help="Chrome DevTools Protocol WebSocket URL for an already running Chrome session. "
         "If omitted, Chrome is launched automatically.",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--port",
         type=int,
         default=9222,
         help="Remote debugging port when auto-launching Chrome (default: 9222).",
     )
+
+    subparsers.add_parser("setup", help="Install Chrome and Playwright browser drivers.")
+
+    parser.add_argument(
+        "--cdp-url",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=9222,
+        help=argparse.SUPPRESS,
+    )
+
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+def _run(args: argparse.Namespace) -> int:
     try:
         if args.cdp_url:
             with attach_browser_session(args.cdp_url) as session:
@@ -54,12 +70,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                         pages[0].goto(LINKEDIN_JOBS_URL, wait_until="domcontentloaded")
                 execute_run(session)
     except BrowserSessionError as error:
-        parser.exit(status=1, message=f"{error}\n")
+        print(f"Error: {error}")
+        return 1
     except RuntimeError as error:
-        parser.exit(status=1, message=f"{error}\n")
+        print(f"Error: {error}")
+        return 1
     except KeyboardInterrupt:
         print("\nSession cancelled.")
     return 0
+
+
+def _setup() -> int:
+    from .setup import run_setup
+
+    run_setup()
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "setup":
+        return _setup()
+
+    return _run(args)
 
 
 if __name__ == "__main__":

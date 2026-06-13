@@ -63,7 +63,7 @@ _PLATFORM_PATHS = {
 }
 
 
-def _find_chrome() -> str:
+def find_chrome() -> str:
     for name in _CHROME_NAMES:
         path = shutil.which(name)
         if path:
@@ -85,7 +85,7 @@ def launch_chrome(
     port: int = 9222,
     url: str = "https://www.linkedin.com/jobs/collections/recommended",
 ) -> subprocess.Popen[bytes]:
-    chrome = _find_chrome()
+    chrome = find_chrome()
     args = [
         chrome,
         f"--remote-debugging-port={port}",
