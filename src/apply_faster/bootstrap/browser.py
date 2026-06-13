@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import json
+import platform
+import shutil
+import subprocess
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 
 class BrowserSessionError(RuntimeError):
@@ -39,6 +45,94 @@ def attach_browser_session(cdp_url: str) -> Iterator[BrowserSession]:
             playwright.stop()
         except Exception:
             pass
+
+
+_CHROME_NAMES = (
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+)
+
+_PLATFORM_PATHS = {
+    "Darwin": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "Windows": (
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ),
+}
+
+
+def _find_chrome() -> str:
+    for name in _CHROME_NAMES:
+        path = shutil.which(name)
+        if path:
+            return path
+    system = platform.system()
+    candidates = _PLATFORM_PATHS.get(system, ())
+    if isinstance(candidates, str):
+        candidates = (candidates,)
+    for candidate in candidates:
+        if shutil.which(candidate):
+            return candidate
+    raise BrowserSessionError(
+        "Could not find Chrome or Chromium. "
+        "Install Google Chrome or pass --cdp-url to connect to an existing session."
+    )
+
+
+def launch_chrome(
+    port: int = 9222,
+    url: str = "https://www.linkedin.com/jobs/collections/recommended",
+) -> subprocess.Popen[bytes]:
+    chrome = _find_chrome()
+    args = [
+        chrome,
+        f"--remote-debugging-port={port}",
+        "--user-data-dir=/tmp/chrome-debug",
+        "--profile-directory=Default",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--new-window",
+        url,
+    ]
+    return subprocess.Popen(
+        args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+
+
+def resolve_cdp_url(port: int = 9222, timeout: float = 15.0) -> str:
+    endpoint = f"http://127.0.0.1:{port}/json/version"
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(endpoint, timeout=2) as resp:
+                data = json.loads(resp.read())
+            ws_url: str = data["webSocketDebuggerUrl"]
+            return ws_url
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise BrowserSessionError(
+        f"Chrome debugger did not respond on port {port} within {timeout}s: {last_error}"
+    )
+
+
+@contextmanager
+def launch_browser_session(port: int = 9222) -> Iterator[BrowserSession]:
+    process = launch_chrome(port)
+    try:
+        cdp_url = resolve_cdp_url(port)
+        with attach_browser_session(cdp_url) as session:
+            yield session
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
 
 
 def get_all_pages(browser: Any) -> list[Any]:
