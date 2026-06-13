@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -101,8 +102,10 @@ def launch_chrome(
     )
 
 
-def resolve_cdp_url(port: int = 9222, timeout: float = 15.0) -> str:
-    endpoint = f"http://127.0.0.1:{port}/json/version"
+def resolve_cdp_url(
+    host: str = "127.0.0.1", port: int = 9222, timeout: float = 15.0
+) -> str:
+    endpoint = f"http://{host}:{port}/json/version"
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     while time.monotonic() < deadline:
@@ -110,20 +113,22 @@ def resolve_cdp_url(port: int = 9222, timeout: float = 15.0) -> str:
             with urlopen(endpoint, timeout=2) as resp:
                 data = json.loads(resp.read())
             ws_url: str = data["webSocketDebuggerUrl"]
-            return ws_url
+            return ws_url.replace("127.0.0.1", host)
         except Exception as exc:
             last_error = exc
             time.sleep(0.5)
     raise BrowserSessionError(
-        f"Chrome debugger did not respond on port {port} within {timeout}s: {last_error}"
+        f"Chrome debugger did not respond at {host}:{port} within {timeout}s: {last_error}"
     )
 
 
 @contextmanager
-def launch_browser_session(port: int = 9222) -> Iterator[BrowserSession]:
+def launch_browser_session(
+    host: str = "127.0.0.1", port: int = 9222
+) -> Iterator[BrowserSession]:
     process = launch_chrome(port)
     try:
-        cdp_url = resolve_cdp_url(port)
+        cdp_url = resolve_cdp_url(host=host, port=port)
         with attach_browser_session(cdp_url) as session:
             yield session
     finally:
@@ -133,6 +138,14 @@ def launch_browser_session(port: int = 9222) -> Iterator[BrowserSession]:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+
+
+def cdp_host_from_env() -> str:
+    return os.environ.get("CDP_HOST", "127.0.0.1")
+
+
+def cdp_port_from_env() -> int:
+    return int(os.environ.get("CDP_PORT", "9222"))
 
 
 def get_all_pages(browser: Any) -> list[Any]:
