@@ -18,11 +18,14 @@ The fastest way to get started on any platform (Linux, macOS, Windows).
 ```bash
 google-chrome \
   --remote-debugging-port=9222 \
+  --remote-debugging-address=0.0.0.0 \
   --user-data-dir=/tmp/chrome-debug \
   --profile-directory="Default" \
   --new-window \
   https://www.linkedin.com/jobs/collections/recommended
 ```
+
+> `--remote-debugging-address=0.0.0.0` is required so Docker containers can reach Chrome. Without it, Chrome only listens on `127.0.0.1` which is unreachable from inside a container.
 
 2. **Log in to LinkedIn** in the Chrome window that opens.
 
@@ -146,9 +149,10 @@ applai setup
 ### Chrome not reachable from Docker
 
 - Verify Chrome is running with `--remote-debugging-port=9222`
-- Test the debug endpoint: `curl http://127.0.0.1:9222/json/version`
-- On Linux, ensure Docker version is 20.10+ (required for `host-gateway`)
-- Try overriding the host: `CDP_HOST=172.17.0.1 docker compose up`
+- **Ensure Chrome has `--remote-debugging-address=0.0.0.0`** — without this, Chrome only listens on `127.0.0.1` which Docker containers cannot reach
+- Test the debug endpoint from your host: `curl http://127.0.0.1:9222/json/version`
+- On Linux/WSL2, ensure Docker version is 20.10+ (required for `host-gateway`)
+- If `host.docker.internal` doesn't resolve, try your host IP directly: `CDP_HOST=172.17.0.1 docker compose up`
 
 ### "No open linkedin.com/jobs tab found"
 

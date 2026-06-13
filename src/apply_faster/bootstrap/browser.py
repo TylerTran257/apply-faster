@@ -85,6 +85,7 @@ def find_chrome() -> str:
 def launch_chrome(
     port: int = 9222,
     url: str = "https://www.linkedin.com/jobs/collections/recommended",
+    bind_all: bool = False,
 ) -> subprocess.Popen[bytes]:
     chrome = find_chrome()
     args = [
@@ -97,6 +98,8 @@ def launch_chrome(
         "--new-window",
         url,
     ]
+    if bind_all:
+        args.insert(2, "--remote-debugging-address=0.0.0.0")
     return subprocess.Popen(
         args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
