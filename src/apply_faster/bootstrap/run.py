@@ -20,7 +20,7 @@ from ..linkedin.extractor import (
 from ..linkedin.normalizer import normalize_snapshot
 from ..record.csv_export import export_reviewed_csv
 from ..record.models import RunSummary
-from ..record.runner import RecordJobPostings
+from ..record.runner import RecordJobPostings, SessionObserver
 
 
 @dataclass(frozen=True)
@@ -81,16 +81,22 @@ def capture_bootstrap_artifacts(results_page: Any) -> BootstrapArtifacts:
     )
 
 
-def record_job_postings(results_page: Any, snapshot_path: Path) -> RunSummary:
+def record_job_postings(
+    results_page: Any,
+    snapshot_path: Path,
+    observer: SessionObserver | None = None,
+) -> RunSummary:
     raw_postings: list[PostingPayload] = json.loads(
         snapshot_path.read_text(encoding="utf-8")
     )
     postings = normalize_snapshot(raw_postings)
-    return RecordJobPostings(results_page, postings).run()
+    return RecordJobPostings(results_page, postings, observer=observer).run()
 
 
 def execute_run(
-    session: BrowserSession, presenter: BootstrapPresenter | None = None
+    session: BrowserSession,
+    presenter: BootstrapPresenter | None = None,
+    observer: SessionObserver | None = None,
 ) -> None:
     active_presenter = presenter or BootstrapPresenter()
     active_presenter.announce_start()
@@ -112,7 +118,7 @@ def execute_run(
     )
 
     active_presenter.announce_recording_start()
-    summary = record_job_postings(results_page, artifacts.snapshot_path)
+    summary = record_job_postings(results_page, artifacts.snapshot_path, observer=observer)
     active_presenter.announce_recording_complete(summary)
 
     try:

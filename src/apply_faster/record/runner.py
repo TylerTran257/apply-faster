@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from ..bootstrap.browser import open_review_tab
 from .models import (
@@ -30,12 +30,49 @@ def _live_label(posting: JobPostingInput, index: int, total: int) -> str:
     return label
 
 
+@runtime_checkable
+class SessionObserver(Protocol):
+    def on_session_start(self, total: int) -> None: ...
+    def on_job_start(self, index: int, total: int, posting: JobPostingInput) -> None: ...
+    def on_job_complete(
+        self, index: int, total: int, posting: JobPostingInput, status: str, reason: str | None
+    ) -> None: ...
+    def on_session_complete(self, summary: RunSummary) -> None: ...
+
+
+class CliObserver:
+    def on_session_start(self, total: int) -> None:
+        print(f"\nProcessing {total} job postings...\n")
+
+    def on_job_start(self, index: int, total: int, posting: JobPostingInput) -> None:
+        label = _live_label(posting, index, total)
+        print(f"\n{label}")
+
+    def on_job_complete(
+        self, index: int, total: int, posting: JobPostingInput, status: str, reason: str | None
+    ) -> None:
+        if status == "skipped" and reason:
+            print(f"[{status}] {reason}")
+        else:
+            print(f"[{status}]")
+
+    def on_session_complete(self, summary: RunSummary) -> None:
+        report = render_run_report(summary)
+        print(report)
+
+
 class RecordJobPostings:
-    def __init__(self, results_page: Any, postings: list[JobPostingInput]) -> None:
+    def __init__(
+        self,
+        results_page: Any,
+        postings: list[JobPostingInput],
+        observer: SessionObserver | None = None,
+    ) -> None:
         self.results_page = results_page
         self.postings = postings
         self.summary = RunSummary()
         self.seen_keys: set[str] = set()
+        self.observer: SessionObserver = observer or CliObserver()
 
     def capture_canonical_identity(
         self, posting: JobPostingInput
@@ -68,22 +105,21 @@ class RecordJobPostings:
         try:
             self.results_page.bring_to_front()
             time.sleep(0.5)
-            print("Focus returned to LinkedIn results tab")
-        except Exception as error:
-            print(f"Warning: Could not return focus to results tab: {error}")
+        except Exception:
+            pass
 
     def process_posting(self, posting: JobPostingInput, index: int) -> None:
         canonical_id = self.capture_canonical_identity(posting)
-        label = _live_label(posting, index, len(self.postings))
-        print(f"\n{label}")
+        total = len(self.postings)
+        self.observer.on_job_start(index, total, posting)
         if not validate_posting_url(posting):
             self.record_result(canonical_id, "failed", FAILURE_REASON_INVALID_URL)
-            print("[failed]")
+            self.observer.on_job_complete(index, total, posting, "failed", FAILURE_REASON_INVALID_URL)
             return
         key = canonical_id.unique_key()
         if key is not None and key in self.seen_keys:
             self.record_result(canonical_id, "skipped", SKIP_REASON_DUPLICATE_URL)
-            print("[skipped] duplicate-url")
+            self.observer.on_job_complete(index, total, posting, "skipped", SKIP_REASON_DUPLICATE_URL)
             return
         if key is not None:
             self.seen_keys.add(key)
@@ -94,9 +130,6 @@ class RecordJobPostings:
             if posting_page is None:
                 raise RuntimeError("Could not open review tab")
             active_page = posting_page
-            print(
-                f"Opened job tab. Close it before the page is ready or within {MANUAL_CLOSE_THRESHOLD_SECONDS}s after it is ready to skip, or close it later to mark it as reviewed."
-            )
             try:
                 active_page.goto(
                     posting.url, wait_until="domcontentloaded", timeout=300_000
@@ -106,17 +139,19 @@ class RecordJobPostings:
                     self.record_result(
                         canonical_id, "skipped", SKIP_REASON_CLOSED_BEFORE_READY
                     )
-                    print("[skipped] closed-before-ready")
+                    self.observer.on_job_complete(
+                        index, total, posting, "skipped", SKIP_REASON_CLOSED_BEFORE_READY
+                    )
                     return
                 self.record_result(canonical_id, "failed", str(error))
-                print("[failed]")
+                self.observer.on_job_complete(index, total, posting, "failed", str(error))
                 return
             ready_at = time.time()
             active_page.wait_for_event("close", timeout=0)
             closed_at = time.time()
             status, reason = self.get_posting_outcome(closed_at - ready_at)
             self.record_result(canonical_id, status, reason)
-            print(f"[{status}]")
+            self.observer.on_job_complete(index, total, posting, status, reason)
         except Exception as error:
             if posting_page and not posting_page.is_closed():
                 try:
@@ -124,15 +159,14 @@ class RecordJobPostings:
                 except Exception:
                     pass
             self.record_result(canonical_id, "failed", str(error))
-            print("[failed]")
+            self.observer.on_job_complete(index, total, posting, "failed", str(error))
         finally:
             self.return_focus_to_linkedin_results()
 
     def run(self) -> RunSummary:
-        print(f"\nProcessing {len(self.postings)} job postings...\n")
+        self.observer.on_session_start(len(self.postings))
         for index, posting in enumerate(self.postings):
             self.process_posting(posting, index)
         self.summary.finish()
-        report = render_run_report(self.summary)
-        print(report)
+        self.observer.on_session_complete(self.summary)
         return self.summary
